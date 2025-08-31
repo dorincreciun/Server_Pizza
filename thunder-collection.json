@@ -1,0 +1,33 @@
+{
+  "client": "Thunder Client",
+  "collectionName": "Pizza Shop API",
+  "dateExported": "2025-08-31",
+  "version": "1.1",
+  "folders": [],
+  "requests": [
+    {
+      "_id": "health",
+      "colId": "pizza",
+      "containerId": "",
+      "name": "Health",
+      "url": "http://localhost:4000/health",
+      "method": "GET",
+      "sortNum": 0,
+      "headers": [],
+      "params": [],
+      "tests": []
+    },
+    {
+      "_id": "docs-json",
+      "colId": "pizza",
+      "containerId": "",
+      "name": "Docs JSON",
+      "url": "http://localhost:4000/docs-json",
+      "method": "GET",
+      "sortNum": 1,
+      "headers": [],
+      "params": [],
+      "tests": []
+    }
+  ]
+}

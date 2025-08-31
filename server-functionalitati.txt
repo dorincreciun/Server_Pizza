@@ -1,0 +1,100 @@
+Server Pizza Shop API - Functionalitati (data: 2025-08-31 19:40)
+
+1) Baza si infrastructura
+- Stack: Node.js (Express 4) + TypeScript + Prisma ORM.
+- Baza de date: env-driven (implicit MySQL conform schema.prisma; poate fi si SQLite/altul prin DATABASE_URL). Prisma gestioneaza accesul la tabele: User, Product, Category, Ingredient, ProductVariant, Cart, CartItem, Order, OrderItem, PurchaseStat, EmailVerificationToken.
+- Pornire server: http://localhost:4000 (PORT din env).
+- Healthcheck: GET /health -> { status: "ok" }.
+- Servire fisiere statice: /img serveste imagini din directorul local "img".
+- Documentatie API interactiva: Swagger UI la /docs, si specificatia OpenAPI JSON la /docs-json.
+
+2) Securitate si middleware-uri
+- helmet pentru header-e de securitate.
+- cors configurat via env (origini permise).
+- hpp pentru prevenirea HTTP Parameter Pollution.
+- compression pentru compresia raspunsurilor.
+- cookie-parser pentru parsarea cookie-urilor (folosit de refresh token daca este configurat asa).
+- rate limiting: global si pentru anumite rute (auth/cart/orders) pe baza env (RATE_LIMIT_WINDOW_MIN, RATE_LIMIT_MAX_AUTH etc.).
+- logger: morgan in dev si logger JSON in productie; request logger pentru fiecare cerere.
+- handler-e standard: notFound si errorHandler pentru 404 si erori generale JSON.
+
+3) Autentificare si utilizatori (/api/auth, /api/users)
+- Inregistrare + login cu email si parola; parolele sunt stocate ca hash (bcryptjs).
+- Tokenizare JWT: access token si refresh token; suport pentru reimprospatare sesiune (flux standard JWT; detaliile sunt in modulul auth).
+- Verificare email: sistem cu EmailVerificationToken si nodemailer (in dev se foloseste Ethereal prin createTestAccount). Campul User.emailVerifiedAt marcheaza confirmarea.
+- Rute tipice: /api/auth/register, /api/auth/login, /api/auth/refresh, /api/auth/verify-email, /api/auth/logout (numele exacte pot varia in implementare, dar fluxul este acesta).
+- /api/users expune rute pentru profilul utilizatorului autenticat si/sau administrare (in functie de rol/permisiuni).
+
+4) Catalog produse
+4.1) Categorii (/api/categories)
+- Listare categorii, fiecare cu id, name, slug; relatie 1..N cu produse.
+
+4.2) Ingrediente (/api/ingredients)
+- Listare ingrediente (name, slug, priceDelta). Ingredientele pot ajusta pretul la configurarea unei pizza.
+
+4.3) Produse (/api/products)
+- GET /api/products: listeaza produse disponibile cu paginare si filtrare.
+  Parametri query:
+  - q: cautare in name + description (case-insensitive).
+  - category: poate fi un slug exact sau parte din nume (case-insensitive).
+  - page: pagina (default 1, min 1).
+  - limit: elemente per pagina (default 12, max 100).
+  Raspuns: { items, page, limit, total, totalPages }.
+  Fiecare item include: category (id, name, slug) si variants (id, size, dough, priceDelta). Sortarea este dupa popularityScore desc, apoi createdAt desc.
+
+- GET /api/products/{slug}: returneaza un produs dupa slug cu detalii (category, ingredients, variants). Daca produsul nu exista sau este indisponibil (available=false), raspuns 404.
+
+- Imagini produse: campul Product.imageUrl este normalizat la forma "/img/<fisier>" daca nu este un URL absolut. Serverul serveste fisierele din directorul local img la calea /img.
+
+5) Cos de cumparaturi (/api/cart)
+- Acces protejat cu rate limit dedicat.
+- Cos singular per utilizator (relatie 1:1 User->Cart). CartItem poate avea referinta la un ProductVariant (size + dough) si campuri pentru ingrediente personalizate (customIngredientIds ca JSON). Serverul calculeaza pretul pe item si totalul cosului in functie de configuratie.
+
+6) Comenzi (/api/orders)
+- Creare comanda din cos; status tipic: plasata, platita, livrata etc. (in seed este folosit status "platit").
+- Campuri financiare: subtotal, taxes, deliveryFee, total.
+- ETA livrare: deliveryEta (Date) calculata/estimata.
+- Adresa si comentarii: deliveryAddress, deliveryComment.
+- OrderItem include snapshotName, snapshotConfig, unitPrice, lineTotal pentru audit istoric al configuratiei produsului.
+
+7) Recomandari & statistici cumparare
+- Tabela PurchaseStat retine numaratori per produs si per utilizator (sau global cu userId null). Poate fi folosita pentru recomandari ("cele mai populare" etc.) si pentru sortari/filtre pe popularitate (exista camp popularityScore pe Product).
+
+8) Seed si date de exemplu
+- Script: npm run prisma:seed (apeleaza src/db/seed.ts) care:
+  - Creeaza categorii, ingrediente, un catalog extins (500+ produse configurabile, cu variante de marime si tip de blat) si cateva produse simple.
+  - Normalizeaza valorile imageUrl existente la formatul corect (inlocuieste backslash, adauga "/img/" etc.).
+  - Creeaza utilizatori de exemplu (verified@pizza.local cu email verificat si un cos creat; unverified@pizza.local) si o comanda exemplu.
+  - Populeaza cateva statistici de cumparare.
+
+9) Mediu si configurare (.env)
+- DATABASE_URL: conexiunea la BD (implicit in proiect este setat provider MySQL in prisma/schema.prisma; poate fi modificat prin env).
+- PORT: portul HTTP al serverului (default 4000 daca nu e altfel configurat).
+- Setari CORS si rate limit configurabile prin env (vezi createAppSecurity/env).
+- Nodemailer: in dezvoltare foloseste automat conturi Ethereal (fara configurare sensibila in .env); in productie se seteaza un transport real.
+
+10) Observatii privind bune practici
+- Validare cu zod (in modulele relevante) pentru payload-uri.
+- Logging consistent si erori JSON structurate.
+- Limitari de dimensiune pentru body (1mb) si protejarea parametrilor de query.
+- Swagger JSDoc prin adnotari pe rute; fisierul src/docs/openapi.ts este punct de extensie pentru scheme comune.
+
+11) Rute cheie (rezumat)
+- GET /health
+- GET /docs, GET /docs-json
+- GET /img/<file>
+- /api/auth: register, login, refresh, verify-email, logout
+- /api/users: profil si operatiuni legate de utilizatori
+- /api/categories: listare categorii
+- /api/ingredients: listare ingrediente
+- GET /api/products, GET /api/products/{slug}
+- /api/cart: operatiuni pe cos (adaugare, listare, actualizare, stergere iteme)
+- /api/orders: creare/listare comenzi
+
+12) Testare rapida
+- Ruleaza serverul: npm run dev
+- Acceseaza documentatia: http://localhost:4000/docs
+- Listeaza produse: GET http://localhost:4000/api/products
+- Ia un produs: GET http://localhost:4000/api/products/margherita-1 (exemplu; slug-urile sunt generate in seed)
+
+Nota: anumite rute exacte pot varia in functie de implementarea completa a modulelor (auth/users/cart/orders). Structura de mai sus reflecta intentia si arhitectura proiectului si rutele vizibile in codul curent.

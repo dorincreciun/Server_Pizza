@@ -1,0 +1,249 @@
+PROMPT MASTER — BACKEND EXPRESS + PRISMA (PIZZA SHOP API) — FĂRĂ PLACEHOLDERE
+
+OBIECTIV
+Construiește un proiect backend complet, gratuit și ușor de deploy, folosind Node.js (Express) + Prisma ORM (compatibil MySQL în prod), care oferă:
+- Autentificare cu email + parolă, confirmare prin email (Nodemailer cu Ethereal în dev, createTestAccount).
+- Căutare + filtrare + sortare + paginare pentru produse (pizza).
+- Categorii de pizza (pentru afișare pe ecran).
+- Tipuri de pizza: 1) simplă, 2) configurabilă (cu două dimensiuni: mică/medie/mare și cu două tipuri de aluat: subțire/tradițional) + ingrediente configurabile.
+- Filtrare după: tip pizza (simplă/configurabilă), interval de preț [0, max], ingrediente, aluat (subțire/tradițional).
+- Coș de cumpărături (add/update/remove/clear).
+- Comenzi („Comenzile mele”) cu statusuri: „platit”, „respins”, „in_asteptare”; fiecare comandă include lista produselor comandate, totaluri, taxe, cost livrare, metodă/plată simulată.
+- Recomandări de pizza bazate pe numărul de cumpărări (top N produse cumpărate de user și global).
+- Swagger (OpenAPI) auto-generat + Swagger UI pentru testare rapidă.
+- Securitate: rate limiting anti-DDoS, helmet, CORS, HPP, validare input, hashing parole, JWT (access + refresh), audit logging minim.
+- Scripturi NPM simple pentru dev/build/migrate/seed, fără pași manuali ascunși.
+
+CONSTRÂNGERI
+- Folosește doar biblioteci gratuite.
+- Nu folosi servicii externe plătite. Emailul de confirmare în dev se face prin Nodemailer „createTestAccount” (Ethereal). În producție se lasă hook-uri/documentație pentru înlocuire.
+- Zero placeholder-e în cod, toate valorile implicite au fallbackuri sigure (.env cu defaulturi).
+- Repo să conțină un seed de date coerent pentru testare (categorii, ingrediente, pizza simple și configurabile).
+
+TECH STACK (obligatoriu)
+- Node 20+, TypeScript, Express 4/5, Prisma ORM
+- DB: SQLite (dev) cu prisma „provider = sqlite”; configurează datasource astfel încât să poată fi schimbat pe „postgresql” sau „mysql” prin variabilă de env.
+- Auth: JWT (access + refresh), bcryptjs
+- Sec: helmet, cors, hpp, express-rate-limit, compression
+- Logger: morgan (dev) + format JSON minimal pentru prod
+- Docs: swagger-jsdoc + swagger-ui-express
+- Testare endpoint rapidă: Swagger UI + colecție Postman/Thunder Client exportată
+- Email: nodemailer (createTestAccount în dev)
+- Utils: dayjs pentru date/ore
+- Paginare/sortare/filtrare: parametri query strict validați cu zod
+
+STRUCTURA PROIECTULUI (obligatorie)
+- /src
+  - /app
+    - server.ts (bootstrap Express, middlewares, error handling)
+    - routes.ts (montează rutele pe /api)
+  - /config
+    - env.ts (citire .env cu fallbackuri sigure)
+    - security.ts (rate-limiter, cors, helmet, hpp, compression)
+    - swagger.ts (config swagger-jsdoc)
+    - mailer.ts (nodemailer transport createTestAccount pentru dev)
+  - /db
+    - client.ts (PrismaClient singleton)
+    - seed.ts (seed complet)
+  - /modules
+    - /auth
+      - auth.controller.ts
+      - auth.service.ts
+      - auth.routes.ts
+      - auth.schemas.ts (zod)
+      - auth.types.ts
+      - auth.middleware.ts (requireAuth, refresh)
+      - auth.utils.ts (jwt sign/verify, password hash/compare, email tokens)
+    - /users
+      - users.controller.ts
+      - users.service.ts
+      - users.routes.ts
+      - users.schemas.ts
+    - /catalog
+      - categories.controller.ts / service.ts / routes.ts / schemas.ts
+      - ingredients.controller.ts / service.ts / routes.ts / schemas.ts
+      - products.controller.ts / service.ts / routes.ts / schemas.ts
+      - product.utils.ts (query builders: search/filter/sort/paginate)
+    - /cart
+      - cart.controller.ts / service.ts / routes.ts / schemas.ts
+    - /orders
+      - orders.controller.ts / service.ts / routes.ts / schemas.ts
+      - recommendation.service.ts (top vânzări user/global)
+      - pricing.service.ts (subtotal, taxe, livrare, total)
+      - eta.service.ts (estimare livrare)
+  - /middlewares
+    - error.middleware.ts (handler unificat)
+    - notFound.middleware.ts
+    - zod.middleware.ts (validateBody/Query/Params)
+  - /utils
+    - logger.ts (morgan + json logger in prod)
+    - pagination.ts (helpers)
+    - constants.ts (enumuri sort/status etc.)
+  - /docs
+    - openapi.ts (sursă pentru swagger-jsdoc, cu JSDoc @swagger pe rute)
+- prisma/schema.prisma
+- prisma/migrations/
+- .env.example
+- package.json (scripturi complete)
+- README.md (instrucțiuni rulare/deploy)
+- thunder-collection.json (colecție requesturi)
+
+PRISMA SCHEMA (obligatoriu, modele minime)
+- User: id, email (unic), emailVerifiedAt (nullable), passwordHash, name, phone (unic opțional), createdAt, updatedAt, role ('user'|'admin')
+- EmailVerificationToken: id, userId, token (unic), expiresAt, createdAt
+- Category: id, name (unic), slug (unic), createdAt
+- Ingredient: id, name (unic), slug (unic), priceDelta (default 0), createdAt
+- Product (Pizza): id, name, slug (unic), description, basePrice, isConfigurable (boolean), popularityScore (default 0), createdAt, updatedAt, categoryId (FK), available (boolean)
+- ProductIngredient (M:N): productId, ingredientId
+- DoughType (enum): 'subtire' | 'traditional'
+- Size (enum): 'mica' | 'medie' | 'mare'
+- ProductVariant: id, productId, size (enum), dough (enum), priceDelta (poate fi 0)
+- Cart: id, userId, createdAt, updatedAt
+- CartItem: id, cartId, productId, variantId (nullable pentru pizza simplă), quantity, customIngredientIds (JSON[]), itemPrice, createdAt
+- Order: id, userId, status ('platit'|'respins'|'in_asteptare'), subtotal, taxes, deliveryFee, total, deliveryAddress, deliveryComment, deliveryEta, createdAt
+- OrderItem: id, orderId, productId, variantId (nullable), quantity, snapshotName, snapshotConfig (JSON: size/dough/customIngredients), unitPrice, lineTotal
+- PurchaseStat: id, productId, userId (nullable pentru global?), count
+
+SEED (obligatoriu)
+- 5–8 categorii (ex: „Clasice”, „Picante”, „Veggie”, „Cu pui”, „Dulci”).
+- 12–20 ingrediente (ex: mozzarella, sos roșii, pepperoni, ardei, măsline etc.).
+- 10–16 produse: mix între „isConfigurable = false” (cu preț fix) și „isConfigurable = true” (cu variante size+dough și ingredientele de bază). PopularityScore distribuit.
+- 1 utilizator test cu email verificat și 1 neconfirmat.
+- 1 coș exemplu și 1–2 comenzi generate.
+
+RUTE API (contract stabil pentru frontend)
+Prefix: /api
+- Health: GET /health -> {status:"ok"}
+- Auth:
+  - POST /auth/register (body: email, password, name, phone?) -> trimite email verificare
+  - GET  /auth/verify-email?token=... -> confirmă email
+  - POST /auth/login (email, password) -> set httpOnly cookies (access+refresh) sau tokens în body (configurabil)
+  - POST /auth/refresh -> obține access nou
+  - POST /auth/logout -> invalidează refresh
+  - GET  /auth/me -> profil (protejată)
+  - POST /auth/change-password (oldPassword, newPassword) (protejată)
+- Catalog/Categorii/Ingrediente:
+  - GET /categories -> listă categorii
+  - GET /ingredients -> listă ingrediente
+- Produse (Pizza):
+  - GET /products
+    - Query:
+      - q (search în nume/descriere)
+      - category (slug)
+      - type (simpla|configurabila|all)
+      - dough (subtire|traditional|all)
+      - minPrice, maxPrice (numerice; default 0..∞)
+      - includeIngredients (listă slug-uri)
+      - excludeIngredients (listă slug-uri)
+      - sort (price_asc|price_desc|popular|unpopular|newest|oldest)
+      - page, limit (paginare; default 1, 12)
+  - GET /products/:slug -> detalii produs + variante + ingrediente de bază
+- Cart (protejate):
+  - GET    /cart -> conținut coș curent
+  - POST   /cart/items -> adaugă (productId, variantId?, quantity, customIngredientIds[])
+  - PATCH  /cart/items/:id -> actualizează quantity sau config
+  - DELETE /cart/items/:id -> elimină
+  - DELETE /cart -> golește coșul
+- Orders (protejate):
+  - POST /orders -> confirmă comandă din coș
+      Body include: nume, prenume, email, telefon, adresa_livrare, comentariu (opțional)
+      Server calculează: subtotal, taxes, deliveryFee, total, deliveryEta (ex: now + 40-60 min)
+      Plata: simulată (status „platit” sau „in_asteptare” configurabil la seed/env)
+  - GET  /orders/my -> lista comenzilor userului (paginată: page, limit, sort=createdAt_desc/asc)
+  - GET  /orders/:id -> detalii comandă (inclusiv items)
+  - GET  /orders/recommendations -> top produse (user-based + global), combinate
+- Admin (opțional, dar definește hook-uri): CRUD produse/categorii/ingrediente (protejate cu rol 'admin')
+
+VALIDARE & ERORI
+- Toate rutele folosesc middleware zod pentru body/query/params.
+- Handler global de erori: formatează JSON (statusCode, message, details).
+- 404 middleware pentru rute inexistente.
+
+SECURITATE & HARDENING (obligatoriu)
+- helmet, cors (whitelist din env), hpp, compression
+- rate-limiter: 100 req/15min per IP pe /auth și /orders; 300 req/15min per IP global
+- limită body: 1MB JSON
+- parole: bcryptjs cu saltRounds=12
+- JWT HS256: ACCESS_TTL=15m, REFRESH_TTL=7d; stocare refresh în cookie httpOnly secure (în dev allow secure=false) sau în header — configurabil prin env
+- CSRF: dacă se folosesc cookie-uri, expune un endpoint /auth/csrf-token (opțional)
+- Logare încercări eșuate de login
+- CORS strict pe origini din ENV, metode: GET,POST,PATCH,DELETE
+
+RECOMANDĂRI (bazate pe cumpărări)
+- recommendation.service.ts:
+  - Pentru user: top N produse din OrderItem ale userului, ordonate desc după sum(quantity).
+  - Global: top N produse din OrderItem (toți userii).
+  - Combina rezultate eliminând duplicate, ordonează după scor compus (globalWeight 0.6, userWeight 0.4).
+
+LOGICĂ DE PREȚURI & ETA
+- pricing.service.ts: calculează subtotal din CartItem.itemPrice * quantity + priceDelta ingrediente custom + variant priceDelta; taxe procentuale (ex: 8% din subtotal) + deliveryFee (ex: 20 lei dacă total < 200, altfel 0) -> total.
+- eta.service.ts: now + window 40–60 min (config prin env: ETA_MIN=40, ETA_MAX=60).
+
+DOCUMENTAȚIE SWAGGER
+- Descriere API + Auth (Bearer) + exemple de request/response pentru fiecare endpoint important.
+- Tag-uri: Auth, Catalog, Products, Cart, Orders, Recommendations, Health.
+- Montare UI: GET /docs (swagger-ui-express). JSON spec: GET /docs-json.
+
+SCRIPTURI NPM (obligatoriu)
+- "dev": "tsx src/app/server.ts"
+- "build": "tsc -p tsconfig.json"
+- "start": "node dist/app/server.js"
+- "prisma:generate": "prisma generate"
+- "prisma:migrate": "prisma migrate dev --name init"
+- "prisma:deploy": "prisma migrate deploy"
+- "prisma:seed": "tsx src/db/seed.ts"
+- "lint": "eslint ."
+- "format": "prettier --write ."
+
+ENV (obligatoriu; cu fallbackuri sigure)
+- NODE_ENV=development
+- PORT=4000
+- DATABASE_URL="file:./dev.db" (SQLite)
+- JWT_ACCESS_SECRET="dev_access_secret_change_me"
+- JWT_REFRESH_SECRET="dev_refresh_secret_change_me"
+- ACCESS_TOKEN_TTL="15m"
+- REFRESH_TOKEN_TTL="7d"
+- CORS_ORIGINS="http://localhost:5173"
+- RATE_LIMIT_WINDOW_MIN=15
+- RATE_LIMIT_MAX_GLOBAL=300
+- RATE_LIMIT_MAX_AUTH=100
+- TAX_PERCENT=8
+- DELIVERY_FEE=20
+- FREE_DELIVERY_THRESHOLD=200
+- ETA_MIN=40
+- ETA_MAX=60
+Notă: În producție, DATABASE_URL poate fi setat pe Postgres/MySQL fără a schimba codul.
+
+ACCEPTANCE CRITERIA (verificabile)
+1) /health răspunde 200 cu {status:"ok"}.
+2) Register + verify-email + login funcționează end-to-end (cu email Ethereal vizibil în log; linkul de verificare face GET și setează emailVerifiedAt).
+3) /products suportă toate filtrele/ordinea/paginarea din contract. Răspunsul include {items, page, limit, total, totalPages}.
+4) /cart și /orders funcționează: din coș se creează o comandă cu status „platit” sau „in_asteptare”, cu totaluri corecte și eta în intervalul configurat.
+5) /orders/my returnează comenzile userului cu paginare + sortare.
+6) /orders/recommendations returnează top produse pentru user + global.
+7) Swagger UI disponibil la /docs; /docs-json returnează spec complet.
+8) Rate limiting activ și CORS restricționat.
+9) Seed populat logic, fără erori la „npm run prisma:seed”.
+
+INSTRUCȚIUNI DE GENERARE (te rog respectă întocmai)
+- Creează proiect TypeScript cu tsconfig pentru NodeNext moduleResolution.
+- Configurează ESLint + Prettier (reguli standard).
+- Implementează fiecare modul conform structurii de mai sus.
+- Adaugă comentarii JSDoc cu @swagger pentru fiecare router.
+- Folosește middleware-uri de validare zod pentru fiecare endpoint (body/query/params).
+- Nu lăsa TODO-uri sau cod mort.
+- În README.md descrie pașii: npm i, npx prisma generate, npx prisma migrate dev, npm run prisma:seed, npm run dev, deschide /docs.
+- Exportă „thunder-collection.json” cu requesturi pentru toate rutele (inclusiv exemple complete).
+
+BONUS (dacă e timp)
+- Endpoint /stats/popular-products (global) cu cache in-memory 5 min.
+- ETag + Cache-Control pe GET /products (paginat) 60s.
+- Indexe în prisma pentru căutare/sortare (slug, categoryId, createdAt, popularityScore, basePrice).
+
+LIVRABILE
+- Cod sursă complet.
+- Schema Prisma + migrații + seed.
+- OpenAPI complet + Swagger UI.
+- README.md clar.
+- Colecție Thunder Client/Postman.
+- Scripturi npm conforme.
