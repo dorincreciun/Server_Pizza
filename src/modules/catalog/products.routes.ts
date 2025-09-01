@@ -40,6 +40,7 @@ productsRouter.get('/', async (req, res, next) => {
     const page = Math.max(parseInt((req.query.page as string) || '1', 10) || 1, 1);
     const limitReq = Math.max(parseInt((req.query.limit as string) || '12', 10) || 12, 1);
     const limit = Math.min(limitReq, 100);
+    const sort = (req.query.sort as string | undefined)?.trim();
     const skip = (page - 1) * limit;
 
     const where: any = { available: true };
@@ -53,11 +54,26 @@ productsRouter.get('/', async (req, res, next) => {
       where.category = { OR: [ { slug: category }, { name: { contains: category, mode: 'insensitive' } } ] };
     }
 
-    const [total, items] = await Promise.all([
+    let orderBy: any[] = [{ popularityScore: 'desc' }, { createdAt: 'desc' }];
+    if (sort) {
+      if (sort === 'newest') orderBy = [{ createdAt: 'desc' }];
+      else if (sort === 'price_asc') orderBy = [{ basePrice: 'asc' }];
+      else if (sort === 'price_desc') orderBy = [{ basePrice: 'desc' }];
+      else if (sort === 'rating_desc') orderBy = [{ popularityScore: 'desc' }];
+      else {
+        const err: any = new Error('Invalid sort');
+        err.statusCode = 400;
+        err.code = 'BAD_REQUEST';
+        err.details = { sort: ['sort must be one of newest, price_asc, price_desc, rating_desc'] };
+        throw err;
+      }
+    }
+
+    const [total, products] = await Promise.all([
       prisma.product.count({ where }),
       prisma.product.findMany({
         where,
-        orderBy: [{ popularityScore: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         include: {
           category: { select: { id: true, name: true, slug: true } },
           variants: { select: { id: true, size: true, dough: true, priceDelta: true } },
@@ -66,6 +82,18 @@ productsRouter.get('/', async (req, res, next) => {
         take: limit,
       }),
     ]);
+
+    const items = products.map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      description: p.description || undefined,
+      imageUrl: p.imageUrl && /^https?:\/\//i.test(p.imageUrl) ? p.imageUrl : (p.imageUrl ? p.imageUrl : undefined),
+      basePrice: p.basePrice,
+      rating: undefined,
+      category: p.category,
+      variants: p.variants.map((v) => ({ id: v.id, size: v.size, dough: v.dough, priceDelta: v.priceDelta })),
+    }));
 
     const totalPages = Math.ceil(total / limit) || 1;
     res.json({ items, page, limit, total, totalPages });

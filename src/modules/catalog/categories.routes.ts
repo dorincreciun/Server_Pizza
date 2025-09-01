@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { prisma } from '../../db/client.js';
 
 export const categoriesRouter = Router();
 
@@ -19,6 +20,11 @@ export const categoriesRouter = Router();
  *       200:
  *         description: OK
  */
-categoriesRouter.get('/', (_req, res) => {
-  res.json({ items: [], total: 0 });
+categoriesRouter.get('/', async (_req, res, next) => {
+  try {
+    const cats = await prisma.category.findMany({ select: { id: true, name: true, slug: true } });
+    res.json(cats);
+  } catch (e) {
+    next(e);
+  }
 });

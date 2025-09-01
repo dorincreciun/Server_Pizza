@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { prisma } from '../../db/client.js';
 
 export const ingredientsRouter = Router();
 
@@ -12,6 +13,11 @@ export const ingredientsRouter = Router();
  *       200:
  *         description: OK
  */
-ingredientsRouter.get('/', (_req, res) => {
-  res.json({ items: [], total: 0 });
+ingredientsRouter.get('/', async (_req, res, next) => {
+  try {
+    const items = await prisma.ingredient.findMany({ select: { id: true, name: true, slug: true, priceDelta: true } });
+    res.json(items);
+  } catch (e) {
+    next(e);
+  }
 });
